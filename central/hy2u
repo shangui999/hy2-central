@@ -85,10 +85,10 @@ def print_uris(password):
         tag = n.get("tag", ip)
         mport = n.get("mport", "")
         mport_part = f"&mport={mport}" if mport else ""
-        print(f"hysteria2://{password}@{ip}:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#{tag}-hy2")
+        print(f"hysteria2://{password}@{ip}:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#hy2-{tag}")
         ipv6 = n.get("ipv6")
         if ipv6:
-            print(f"hysteria2://{password}@[{ipv6}]:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#{tag}-hy2-v6")
+            print(f"hysteria2://{password}@[{ipv6}]:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#hy2-v6-{tag}")
 
 
 def cmd_list():

@@ -36,10 +36,11 @@ def api_call(method, path, data=None):
 
 
 def gen_password():
-    return subprocess.run(
-        ["openssl", "rand", "-base64", "12"],
+    result = subprocess.run(
+        ["openssl", "rand", "-base64", "16"],
         capture_output=True, text=True
     ).stdout.strip()
+    return result.replace("/", "").replace("+", "").replace("=", "")[:16]
 
 
 def load_nodes():
@@ -88,6 +89,8 @@ def calc_expire(spec):
 
 
 def print_uris(password):
+    from urllib.parse import quote
+    password_encoded = quote(password, safe="")
     nodes = load_nodes()
     if not nodes:
         print("  (无节点配置, 请编辑 /etc/hysteria/nodes.json)")
@@ -100,10 +103,10 @@ def print_uris(password):
         tag = n.get("tag", ip)
         mport = n.get("mport", "")
         mport_part = f"&mport={mport}" if mport else ""
-        print(f"hysteria2://{password}@{ip}:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#hy2-{tag}")
+        print(f"hysteria2://{password_encoded}@{ip}:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#hy2-{tag}")
         ipv6 = n.get("ipv6")
         if ipv6:
-            print(f"hysteria2://{password}@[{ipv6}]:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#hy2-v6-{tag}")
+            print(f"hysteria2://{password_encoded}@[{ipv6}]:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#hy2-v6-{tag}")
 
 
 def cmd_list():

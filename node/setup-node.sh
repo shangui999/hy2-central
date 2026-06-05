@@ -127,8 +127,8 @@ from urllib.error import URLError
 
 REMOTE_AUTH = "REMOTE_AUTH_PLACEHOLDER"
 LISTEN_PORT = 5580
-CACHE_TTL = 3600
-CACHE_TTL_FAIL = 60
+CACHE_TTL = 600
+CACHE_TTL_FAIL = 600
 
 _cache = {}
 _lock = threading.Lock()

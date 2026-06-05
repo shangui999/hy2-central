@@ -17,8 +17,8 @@ from urllib.error import URLError
 
 REMOTE_AUTH = "https://your-auth-domain.com/auth"  # CF Tunnel URL
 LISTEN_PORT = 5580
-CACHE_TTL = 3600
-CACHE_TTL_FAIL = 60  # 1 hour
+CACHE_TTL = 600
+CACHE_TTL_FAIL = 600  # 1 hour
 
 NODE_IP = "0.0.0.0"     # this node's public IPv4, set during setup
 AUTH_KEY = "CHANGE_ME"   # must match central auth-server.py

@@ -82,22 +82,60 @@ systemctl enable --now hy2-auth
 
 ### 2. Hy2 Node (一键部署)
 
+**前提**: 你已经有一台新 VPS (root 权限, Debian/Ubuntu)，想把它加为 hy2 节点。
+
+**Step 1** — SSH 到新 VPS 上，下载并执行部署脚本:
+
 ```bash
-# 从 Central Server 获取脚本并执行
-ssh central-server 'cat /etc/hysteria/setup-node.sh' | bash -s -- <node-tag>
+# 方式 A: 从 Central Server 拉取 (推荐，脚本里已包含你的 AUTH_KEY 等配置)
+ssh your-central 'cat /etc/hysteria/setup-node.sh' | bash -s -- us-lax-01
+#                                                                ^^^^^^^^
+#                                                                节点 tag，随便起
 
-# 脚本自动完成:
-# [1/7] BBR + UDP buffer 优化
-# [2/7] 安装 Hysteria 2
-# [3/7] 自签证书
-# [4/7] 写入配置
-# [5/7] 端口跳跃 (IPv4 + IPv6)
-# [6/7] 部署认证缓存代理
-# [7/7] 启动服务
-
-# 最后输出一条命令，在 Central 上执行即可注册节点
-ssh central-server 'hy2u add-node --tag <tag> --ip <ip> --pin <sha256> --mport 50000-60000'
+# 方式 B: 从 GitHub 下载 (需要手动改配置)
+curl -fsSL https://raw.githubusercontent.com/shangui999/hy2-central/main/node/setup-node.sh -o setup-node.sh
+# 编辑 setup-node.sh，修改 REMOTE_AUTH 和 AUTH_KEY
+vim setup-node.sh
+bash setup-node.sh us-lax-01
 ```
+
+脚本自动完成 7 步:
+1. 开启 BBR + 调大 UDP buffer
+2. 安装 Hysteria 2
+3. 生成自签证书 (CN=bing.com, 100 年)
+4. 写入 config.yaml (auth 指向本地缓存代理)
+5. 配置端口跳跃 iptables (IPv4 + IPv6, 50000-60000 → 9443)
+6. 部署认证缓存代理 (auth-cache.py)
+7. 启动 hysteria-server + auth-cache
+
+**Step 2** — 脚本跑完后会输出节点信息和一条注册命令:
+
+```
+===============================
+  部署完成！
+===============================
+
+  IP:   1.2.3.4
+  IPv6: 2001:db8::1
+  Port: 9443
+  Hop:  50000-60000
+  PIN:  ABCDEF1234567890...
+  Tag:  us-lax-01
+
+─── 在 Central 上执行以下命令注册节点 ───
+
+ssh your-central 'hy2u add-node --tag us-lax-01 --ip 1.2.3.4 --pin ABCDEF... --mport 50000-60000'
+```
+
+**Step 3** — 复制最后那条命令，在你本地终端执行，节点就注册到 Central 了:
+
+```bash
+# 直接粘贴执行
+ssh your-central 'hy2u add-node --tag us-lax-01 --ip 1.2.3.4 --pin ABCDEF... --mport 50000-60000'
+# ✓ 节点已注册: us-lax-01 (1.2.3.4:9443)
+```
+
+完成。新节点立刻可用，现有用户无需任何改动即可连接新节点。
 
 ### 3. 手动部署 Node
 

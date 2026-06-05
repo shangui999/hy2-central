@@ -84,26 +84,26 @@ systemctl enable --now hy2-auth
 
 **前提**: 你已经有一台新 VPS (root 权限, Debian/Ubuntu)，想把它加为 hy2 节点。
 
-**Step 1** — SSH 到 **新 VPS** 上执行 (不是 Central Server！):
+**Step 1** — 在你的本机 (笔记本/台式机) 上执行，把脚本推送到新 VPS 并运行:
 
 ```bash
-# 先登录到新 VPS
-ssh root@<新VPS的IP>
+# ─── 方式 A: 一行搞定 (推荐) ───
+# 从 Central 拉脚本，通过你的本机中转，推到新 VPS 执行
+# 新 VPS 不需要能连 Central，你的机器就是桥
+ssh your-central 'cat /etc/hysteria/setup-node.sh' | ssh root@<新VPS-IP> 'cat > /tmp/setup.sh && bash /tmp/setup.sh us-lax-01'
 
-# 然后在新 VPS 上执行以下命令 ↓↓↓
+# ─── 方式 B: 分步执行 ───
+# 1. 先从 Central 下载脚本到本地
+ssh your-central 'cat /etc/hysteria/setup-node.sh' > /tmp/setup-node.sh
 
-# 方式 A: 从 Central Server 拉取 (推荐，脚本里已包含你的 AUTH_KEY 等配置)
-ssh your-central 'cat /etc/hysteria/setup-node.sh' | bash -s -- us-lax-01
-#                                                                ^^^^^^^^
-#                                                                节点 tag，随便起
+# 2. 推到新 VPS
+ssh root@<新VPS-IP> 'cat > /tmp/setup.sh' < /tmp/setup-node.sh
 
-# 方式 B: 从 GitHub 下载 (需要手动改配置)
-curl -fsSL https://raw.githubusercontent.com/.../node/setup-node.sh -o /tmp/setup-node.sh
-vim /tmp/setup-node.sh   # 修改 REMOTE_AUTH 和 AUTH_KEY
-bash /tmp/setup-node.sh us-lax-01
+# 3. 在新 VPS 上执行
+ssh root@<新VPS-IP> 'bash /tmp/setup.sh us-lax-01'
 ```
 
-> **注意**: 这个脚本只能在新 VPS 上执行，不要在 Central Server 上执行！
+> **注意**: 脚本在**新 VPS** 上执行，不要在 Central Server 上运行！
 > Central Server 只运行 auth-server.py 和 hy2u，不需要 Hysteria 2。
 
 脚本自动完成 7 步:

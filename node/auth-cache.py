@@ -17,7 +17,8 @@ from urllib.error import URLError
 
 REMOTE_AUTH = "https://your-auth-domain.com/auth"  # CF Tunnel URL
 LISTEN_PORT = 5580
-CACHE_TTL = 3600  # 1 hour
+CACHE_TTL = 3600
+CACHE_TTL_FAIL = 60  # 1 hour
 
 NODE_IP = "0.0.0.0"     # this node's public IPv4, set during setup
 AUTH_KEY = "CHANGE_ME"   # must match central auth-server.py
@@ -42,7 +43,8 @@ class CacheHandler(BaseHTTPRequestHandler):
 
         with _lock:
             cached = _cache.get(password)
-            if cached and time.time() - cached["ts"] < CACHE_TTL:
+            ttl = CACHE_TTL if cached["ok"] else CACHE_TTL_FAIL
+            if cached and time.time() - cached["ts"] < ttl:
                 self._respond(200, {"ok": cached["ok"]})
                 sys.stderr.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
                                  f"CACHE HIT: ok={cached['ok']} from {addr}\n")

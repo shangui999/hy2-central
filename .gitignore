@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+users.json
+nodes.json
+!examples/users.json
+!examples/nodes.json

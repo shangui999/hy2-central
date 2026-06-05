@@ -1,0 +1,21 @@
+listen: :9443
+
+tls:
+  cert: /etc/hysteria/server.crt
+  key: /etc/hysteria/server.key
+
+auth:
+  type: http
+  http:
+    url: http://127.0.0.1:5580/auth
+    insecure: false
+
+bandwidth:
+  up: 100 mbps
+  down: 100 mbps
+
+masquerade:
+  type: proxy
+  proxy:
+    url: https://bing.com
+    rewriteHost: true

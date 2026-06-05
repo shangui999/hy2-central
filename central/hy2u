@@ -1,0 +1,324 @@
+#!/usr/bin/env python3
+"""
+Hysteria 2 用户管理 CLI (集中式)
+Usage: hy2u <command> [args]
+"""
+
+import sys
+import json
+import subprocess
+from datetime import datetime, timezone
+from urllib.request import Request, urlopen
+from urllib.error import URLError
+
+API = "http://127.0.0.1:5581"
+USERS_FILE = "/etc/hysteria/users.json"
+NODES_FILE = "/etc/hysteria/nodes.json"
+
+
+def api_call(method, path, data=None):
+    url = f"{API}{path}"
+    body = json.dumps(data).encode() if data else None
+    req = Request(url, data=body, method=method)
+    req.add_header("Content-Type", "application/json")
+    try:
+        with urlopen(req) as resp:
+            return json.loads(resp.read())
+    except URLError as e:
+        if hasattr(e, "read"):
+            try:
+                return json.loads(e.read())
+            except Exception:
+                pass
+        print(f"错误: 无法连接认证服务 ({e})")
+        print("请确认 hy2-auth 服务正在运行: systemctl status hy2-auth")
+        sys.exit(1)
+
+
+def gen_password():
+    return subprocess.run(
+        ["openssl", "rand", "-base64", "12"],
+        capture_output=True, text=True
+    ).stdout.strip()
+
+
+def load_nodes():
+    try:
+        with open(NODES_FILE) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+
+def save_nodes(nodes):
+    tmp = NODES_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(nodes, f, indent=2, ensure_ascii=False)
+    import os
+    os.replace(tmp, NODES_FILE)
+
+
+def calc_expire(months):
+    if months == 0:
+        return None
+    now = datetime.now(timezone.utc)
+    month = now.month + months
+    year = now.year + (month - 1) // 12
+    month = (month - 1) % 12 + 1
+    days_in_month = [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+                     31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    day = min(now.day, days_in_month[month - 1])
+    expire = now.replace(year=year, month=month, day=day)
+    return expire.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def print_uris(password):
+    nodes = load_nodes()
+    if not nodes:
+        print("  (无节点配置, 请编辑 /etc/hysteria/nodes.json)")
+        return
+    for n in nodes:
+        ip = n["ip"]
+        port = n.get("port", 9443)
+        sni = n.get("sni", "bing.com")
+        pin = n.get("pin", "")
+        tag = n.get("tag", ip)
+        mport = n.get("mport", "")
+        mport_part = f"&mport={mport}" if mport else ""
+        print(f"  hysteria2://{password}@{ip}:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#{tag}-hy2")
+        ipv6 = n.get("ipv6")
+        if ipv6:
+            print(f"  hysteria2://{password}@[{ipv6}]:{port}?sni={sni}&insecure=0&pinSHA256={pin}{mport_part}#{tag}-hy2-v6")
+
+
+def cmd_list():
+    result = api_call("GET", "/users")
+    users = result.get("users", [])
+    if not users:
+        print("暂无用户")
+        return
+    rows = []
+    for u in users:
+        expire = u.get("expire_at") or "never"
+        created = u.get("created_at", "")[:19]
+        status = u.get("status", "unknown")
+        rows.append((u["username"], status, expire, created))
+    w1 = max(max(len(r[0]) for r in rows) + 2, 10)
+    fmt = f"  {{:<{w1}}} {{:<10}} {{:<24}} {{:<20}}"
+    print(fmt.format("USERNAME", "STATUS", "EXPIRE", "CREATED"))
+    print("  " + "-" * (w1 + 10 + 24 + 20))
+    for name, status, expire, created in rows:
+        print(fmt.format(name, status, expire, created))
+    print(f"\n  Total: {len(rows)} users")
+
+
+def cmd_add(user=None, password=None, months=1):
+    if not user:
+        user = input("用户名: ").strip()
+        if not user:
+            print("用户名不能为空")
+            return
+    if not password:
+        password = gen_password()
+    expire = calc_expire(months)
+
+    data = {"username": user, "password": password}
+    if expire:
+        data["expire_at"] = expire
+
+    result = api_call("POST", "/users", data)
+    if result.get("ok"):
+        exp_str = f"{expire} UTC ({months}个月)" if expire else "永不过期"
+        print(f"  ✓ 用户 {user} 创建成功")
+        print(f"    密码: {password}")
+        print(f"    过期: {exp_str}")
+        print()
+        print_uris(password)
+    else:
+        print(f"  ✗ 失败: {result.get('error', '未知错误')}")
+
+
+def cmd_del(user=None):
+    if not user:
+        user = input("要删除的用户名: ").strip()
+    result = api_call("DELETE", f"/users/{user}")
+    if result.get("ok"):
+        print(f"  ✓ 用户 {user} 已删除")
+    else:
+        print(f"  ✗ 失败: {result.get('error', '未知错误')}")
+
+
+def cmd_renew(user=None, months=1):
+    if not user:
+        user = input("用户名: ").strip()
+    if months == 0:
+        result = api_call("PUT", f"/users/{user}", {"expire_at": None})
+        if result.get("ok"):
+            print(f"  ✓ 用户 {user} 已设为永不过期")
+        else:
+            print(f"  ✗ 失败: {result.get('error', '未知错误')}")
+        return
+    expire = calc_expire(months)
+    result = api_call("PUT", f"/users/{user}", {"expire_at": expire})
+    if result.get("ok"):
+        print(f"  ✓ 用户 {user} 新过期时间: {expire} UTC ({months}个月后)")
+    else:
+        print(f"  ✗ 失败: {result.get('error', '未知错误')}")
+
+
+def cmd_passwd(user=None, password=None):
+    if not user:
+        user = input("用户名: ").strip()
+    if not password:
+        password = gen_password()
+    result = api_call("PUT", f"/users/{user}", {"password": password})
+    if result.get("ok"):
+        print(f"  ✓ 密码已更新: {user}")
+        print(f"    新密码: {password}")
+        print()
+        print_uris(password)
+    else:
+        print(f"  ✗ 失败: {result.get('error', '未知错误')}")
+
+
+def cmd_uri(user=None):
+    if not user:
+        user = input("用户名: ").strip()
+    try:
+        with open(USERS_FILE) as f:
+            users = json.load(f)
+    except FileNotFoundError:
+        print("错误: users.json 不存在")
+        return
+    if user not in users:
+        print(f"  用户 {user} 不存在")
+        return
+    print_uris(users[user]["password"])
+
+
+def cmd_nodes():
+    nodes = load_nodes()
+    if not nodes:
+        print("  暂无节点, 请编辑 /etc/hysteria/nodes.json")
+        return
+    fmt = "  {:<18} {:<22} {:<6}"
+    print(fmt.format("TAG", "IP", "PORT"))
+    print("  " + "-" * 46)
+    for n in nodes:
+        print(fmt.format(n.get("tag", ""), n["ip"], n.get("port", 9443)))
+
+
+def cmd_add_node(args):
+    tag = ip = ipv6 = pin = mport = sni = None
+    port = 9443
+    i = 0
+    while i < len(args):
+        if args[i] == "--tag" and i + 1 < len(args):
+            tag = args[i + 1]; i += 2
+        elif args[i] == "--ip" and i + 1 < len(args):
+            ip = args[i + 1]; i += 2
+        elif args[i] == "--ipv6" and i + 1 < len(args):
+            ipv6 = args[i + 1]; i += 2
+        elif args[i] == "--port" and i + 1 < len(args):
+            port = int(args[i + 1]); i += 2
+        elif args[i] == "--pin" and i + 1 < len(args):
+            pin = args[i + 1]; i += 2
+        elif args[i] == "--mport" and i + 1 < len(args):
+            mport = args[i + 1]; i += 2
+        elif args[i] == "--sni" and i + 1 < len(args):
+            sni = args[i + 1]; i += 2
+        else:
+            print(f"  未知参数: {args[i]}")
+            return
+    if not tag or not ip or not pin:
+        print("用法: hy2u add-node --tag <tag> --ip <ip> --pin <sha256> [--ipv6 <v6>] [--port 9443] [--mport 50000-60000] [--sni bing.com]")
+        return
+
+    node = {"tag": tag, "ip": ip, "port": port, "sni": sni or "bing.com", "pin": pin}
+    if ipv6:
+        node["ipv6"] = ipv6
+    if mport:
+        node["mport"] = mport
+
+    nodes = load_nodes()
+    for n in nodes:
+        if n.get("tag") == tag:
+            print(f"  ✗ 节点 {tag} 已存在")
+            return
+    nodes.append(node)
+    save_nodes(nodes)
+    print(f"  ✓ 节点已注册: {tag} ({ip}:{port})")
+
+
+def cmd_del_node(tag=None):
+    if not tag:
+        tag = input("节点 tag: ").strip()
+    nodes = load_nodes()
+    new_nodes = [n for n in nodes if n.get("tag") != tag]
+    if len(new_nodes) == len(nodes):
+        print(f"  ✗ 节点 {tag} 不存在")
+        return
+    save_nodes(new_nodes)
+    print(f"  ✓ 节点 {tag} 已删除")
+
+
+def cmd_help():
+    print("""hy2u - Hysteria 2 用户管理 (集中式)
+
+用法: hy2u <命令> [参数]
+
+用户管理:
+  list                         查看所有用户
+  add [用户名] [密码] [月数]    添加用户 (密码空=随机, 月数默认1, 0=永不过期)
+  del [用户名]                  删除用户
+  renew [用户名] [月数]         续期 (从现在起N个月, 0=永不过期)
+  passwd [用户名] [新密码]      改密码 (省略=随机)
+  uri [用户名]                  生成所有节点的客户端 URI
+
+节点管理:
+  nodes                        查看节点列表
+  add-node --tag <t> --ip <ip> --pin <sha256> [--ipv6 <v6>] [--port 9443] [--mport 50000-60000]
+  del-node [tag]               删除节点
+
+示例:
+  hy2u add alice "" 3
+  hy2u uri bob
+  hy2u add-node --tag jp-tok-01 --ip 1.2.3.4 --pin ABC123 --mport 50000-60000
+  hy2u del-node jp-tok-01""")
+
+
+def main():
+    args = sys.argv[1:]
+    cmd = args[0] if args else "help"
+
+    if cmd in ("list", "ls", "l"):
+        cmd_list()
+    elif cmd in ("add", "a"):
+        user = args[1] if len(args) > 1 else None
+        password = args[2] if len(args) > 2 and args[2] else None
+        months = int(args[3]) if len(args) > 3 else 1
+        cmd_add(user, password, months)
+    elif cmd in ("del", "rm", "d"):
+        cmd_del(args[1] if len(args) > 1 else None)
+    elif cmd in ("renew", "r"):
+        user = args[1] if len(args) > 1 else None
+        months = int(args[2]) if len(args) > 2 else 1
+        cmd_renew(user, months)
+    elif cmd in ("passwd", "pw", "p"):
+        user = args[1] if len(args) > 1 else None
+        password = args[2] if len(args) > 2 else None
+        cmd_passwd(user, password)
+    elif cmd in ("uri", "u"):
+        cmd_uri(args[1] if len(args) > 1 else None)
+    elif cmd in ("nodes", "n"):
+        cmd_nodes()
+    elif cmd == "add-node":
+        cmd_add_node(args[1:])
+    elif cmd in ("del-node", "rm-node"):
+        cmd_del_node(args[1] if len(args) > 1 else None)
+    else:
+        cmd_help()
+
+
+if __name__ == "__main__":
+    main()

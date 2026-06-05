@@ -1,0 +1,13 @@
+[Unit]
+Description=Hysteria 2 Auth Server (centralized)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /etc/hysteria/auth-server.py
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

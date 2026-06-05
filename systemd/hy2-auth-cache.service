@@ -1,0 +1,13 @@
+[Unit]
+Description=Hysteria 2 Auth Cache Proxy
+After=network.target
+Before=hysteria-server.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /etc/hysteria/auth-cache.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

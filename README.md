@@ -84,20 +84,27 @@ systemctl enable --now hy2-auth
 
 **前提**: 你已经有一台新 VPS (root 权限, Debian/Ubuntu)，想把它加为 hy2 节点。
 
-**Step 1** — SSH 到新 VPS 上，下载并执行部署脚本:
+**Step 1** — SSH 到 **新 VPS** 上执行 (不是 Central Server！):
 
 ```bash
+# 先登录到新 VPS
+ssh root@<新VPS的IP>
+
+# 然后在新 VPS 上执行以下命令 ↓↓↓
+
 # 方式 A: 从 Central Server 拉取 (推荐，脚本里已包含你的 AUTH_KEY 等配置)
 ssh your-central 'cat /etc/hysteria/setup-node.sh' | bash -s -- us-lax-01
 #                                                                ^^^^^^^^
 #                                                                节点 tag，随便起
 
 # 方式 B: 从 GitHub 下载 (需要手动改配置)
-curl -fsSL https://raw.githubusercontent.com/shangui999/hy2-central/main/node/setup-node.sh -o setup-node.sh
-# 编辑 setup-node.sh，修改 REMOTE_AUTH 和 AUTH_KEY
-vim setup-node.sh
-bash setup-node.sh us-lax-01
+curl -fsSL https://raw.githubusercontent.com/.../node/setup-node.sh -o /tmp/setup-node.sh
+vim /tmp/setup-node.sh   # 修改 REMOTE_AUTH 和 AUTH_KEY
+bash /tmp/setup-node.sh us-lax-01
 ```
+
+> **注意**: 这个脚本只能在新 VPS 上执行，不要在 Central Server 上执行！
+> Central Server 只运行 auth-server.py 和 hy2u，不需要 Hysteria 2。
 
 脚本自动完成 7 步:
 1. 开启 BBR + 调大 UDP buffer

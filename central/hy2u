@@ -274,46 +274,84 @@ def cmd_del_node(tag=None):
 
 
 def cmd_help():
-    print("""hy2u - Hysteria 2 用户管理 (集中式)
+    import unicodedata
+    def wlen(s):
+        """计算字符串的显示宽度 (中文占2列)"""
+        w = 0
+        for c in s:
+            if unicodedata.east_asian_width(c) in ('F', 'W'):
+                w += 2
+            else:
+                w += 1
+        return w
 
-用法: hy2u <命令> [参数]
+    def fmt(left, right, width=40):
+        pad = width - wlen(left)
+        if pad < 1:
+            pad = 1
+        return f"  {left}{' ' * pad}{right}"
 
-用户管理:
-  list                              查看所有用户
-  add  [用户] [密码] [时长|日期]    添加用户 (密码空=随机, 默认1月)
-  del  [用户]                       删除用户
-  renew [用户] [时长|日期]          续期
-  passwd [用户] [新密码]            改密码 (省略=随机)
-  uri  [用户]                       生成所有节点的客户端 URI
+    lines = [
+        "hy2u - Hysteria 2 用户管理 (集中式)",
+        "",
+        "用法: hy2u <命令> [参数]",
+        "",
+        "用户管理:",
+    ]
+    cmds = [
+        ("list",                            "查看所有用户"),
+        ("add  [用户] [密码] [时长|日期]",  "添加用户 (密码空=随机, 默认1月)"),
+        ("del  [用户]",                     "删除用户"),
+        ("renew [用户] [时长|日期]",        "续期"),
+        ("passwd [用户] [新密码]",          "改密码 (省略=随机)"),
+        ("uri  [用户]",                     "生成所有节点的客户端 URI"),
+    ]
+    for l, r in cmds:
+        lines.append(fmt(l, r))
 
-节点管理:
-  nodes                             查看节点列表
-  add-node <选项>                   注册节点
-  del-node [tag]                    删除节点
+    lines += ["", "节点管理:"]
+    nodes = [
+        ("nodes",           "查看节点列表"),
+        ("add-node <选项>", "注册节点"),
+        ("del-node [tag]",  "删除节点"),
+    ]
+    for l, r in nodes:
+        lines.append(fmt(l, r))
 
-时长格式:
-  30d          30 天后过期
-  6m 或 6      6 个月后过期
-  1y           1 年后过期
-  2027-04-01   指定到期日期
-  never 或 0   永不过期
+    lines += ["", "时长格式:"]
+    durs = [
+        ("30d",        "30 天后过期"),
+        ("6m 或 6",    "6 个月后过期"),
+        ("1y",         "1 年后过期"),
+        ("2027-04-01", "指定到期日期"),
+        ("never 或 0", "永不过期"),
+    ]
+    for l, r in durs:
+        lines.append(fmt(l, r, 18))
 
-示例:
-  hy2u add alice "" 3               添加用户, 随机密码, 3个月
-  hy2u add bob mypass 300d          添加用户, 指定密码, 300天
-  hy2u add carol "" never           添加用户, 永不过期
-  hy2u del alice                    删除用户
-  hy2u renew bob 6m                 续期 6 个月
-  hy2u renew bob 2027-04-01        续期到指定日期
-  hy2u renew bob never              改为永不过期
-  hy2u passwd bob                   随机新密码
-  hy2u uri bob                      输出所有节点 URI
+    lines += ["", "示例:"]
+    examples = [
+        ('hy2u add alice "" 3',      "添加用户, 随机密码, 3个月"),
+        ("hy2u add bob mypass 300d", "添加用户, 指定密码, 300天"),
+        ('hy2u add carol "" never',  "添加用户, 永不过期"),
+        ("hy2u del alice",           "删除用户"),
+        ("hy2u renew bob 6m",       "续期 6 个月"),
+        ("hy2u renew bob 2027-04-01","续期到指定日期"),
+        ("hy2u renew bob never",    "改为永不过期"),
+        ("hy2u passwd bob",         "随机新密码"),
+        ("hy2u uri bob",            "输出所有节点 URI"),
+        ("", ""),
+        ("hy2u nodes",              "查看节点列表"),
+        ("hy2u add-node --tag t ...", "注册节点 (--ip/--pin/--mport)"),
+        ("hy2u del-node jp-tok",    "删除节点"),
+    ]
+    for l, r in examples:
+        if l == "":
+            lines.append("")
+        else:
+            lines.append(fmt(l, r))
 
-  hy2u nodes                        查看节点列表
-  hy2u add-node --tag jp-tok \\
-    --ip 1.2.3.4 --pin ABC123 \\
-    --mport 50000-60000             注册节点
-  hy2u del-node jp-tok              删除节点""")
+    print("\n".join(lines))
 
 def main():
     args = sys.argv[1:]

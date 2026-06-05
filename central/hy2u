@@ -58,10 +58,25 @@ def save_nodes(nodes):
     os.replace(tmp, NODES_FILE)
 
 
-def calc_expire(months):
-    if months == 0:
+def calc_expire(spec):
+    """
+    spec: 0/never=永不过期, 数字=N月, 30d=N天, 6m=N月, 1y=N年, 2027-04-01=日期
+    """
+    from datetime import timedelta
+    if spec in (0, "0", "never"):
         return None
+    s = str(spec)
     now = datetime.now(timezone.utc)
+    if s.endswith("d"):
+        return (now + timedelta(days=int(s[:-1]))).strftime("%Y-%m-%dT%H:%M:%S")
+    if s.endswith("y"):
+        return (now + timedelta(days=int(s[:-1]) * 365)).strftime("%Y-%m-%dT%H:%M:%S")
+    if s.endswith("m"):
+        months = int(s[:-1])
+    elif s.isdigit():
+        months = int(s)
+    else:
+        return s
     month = now.month + months
     year = now.year + (month - 1) // 12
     month = (month - 1) % 12 + 1
@@ -112,7 +127,7 @@ def cmd_list():
     print(f"\n  Total: {len(rows)} users")
 
 
-def cmd_add(user=None, password=None, months=1):
+def cmd_add(user=None, password=None, spec="1"):
     if not user:
         user = input("用户名: ").strip()
         if not user:
@@ -120,7 +135,7 @@ def cmd_add(user=None, password=None, months=1):
             return
     if not password:
         password = gen_password()
-    expire = calc_expire(months)
+    expire = calc_expire(spec)
 
     data = {"username": user, "password": password}
     if expire:
@@ -128,7 +143,7 @@ def cmd_add(user=None, password=None, months=1):
 
     result = api_call("POST", "/users", data)
     if result.get("ok"):
-        exp_str = f"{expire} UTC ({months}个月)" if expire else "永不过期"
+        exp_str = f"{expire}" if expire else "永不过期"
         print(f"  ✓ 用户 {user} 创建成功")
         print(f"    密码: {password}")
         print(f"    过期: {exp_str}")
@@ -148,23 +163,19 @@ def cmd_del(user=None):
         print(f"  ✗ 失败: {result.get('error', '未知错误')}")
 
 
-def cmd_renew(user=None, months=1):
+def cmd_renew(user=None, spec="1"):
     if not user:
         user = input("用户名: ").strip()
-    if months == 0:
-        result = api_call("PUT", f"/users/{user}", {"expire_at": None})
-        if result.get("ok"):
-            print(f"  ✓ 用户 {user} 已设为永不过期")
-        else:
-            print(f"  ✗ 失败: {result.get('error', '未知错误')}")
-        return
-    expire = calc_expire(months)
+    expire = calc_expire(spec)
     result = api_call("PUT", f"/users/{user}", {"expire_at": expire})
     if result.get("ok"):
-        print(f"  ✓ 用户 {user} 新过期时间: {expire} UTC ({months}个月后)")
+        if expire:
+            print(f"  ✓ 用户 {user} 新过期时间: {expire}")
+        else:
+            print(f"  ✓ 用户 {user} 已设为永不过期")
     else:
-        print(f"  ✗ 失败: {result.get('error', '未知错误')}")
-
+        err = result.get("error", "未知错误")
+        print(f"  ✗ 失败: {err}")
 
 def cmd_passwd(user=None, password=None):
     if not user:
@@ -269,9 +280,9 @@ def cmd_help():
 
 用户管理:
   list                         查看所有用户
-  add [用户名] [密码] [月数]    添加用户 (密码空=随机, 月数默认1, 0=永不过期)
+  add [用户名] [密码] [时长|日期] 添加用户 (密码空=随机, 默认1月)
   del [用户名]                  删除用户
-  renew [用户名] [月数]         续期 (从现在起N个月, 0=永不过期)
+  renew [用户名] [时长|日期]    续期 (30d/6m/1y/2027-04-01/never)
   passwd [用户名] [新密码]      改密码 (省略=随机)
   uri [用户名]                  生成所有节点的客户端 URI
 
@@ -296,14 +307,14 @@ def main():
     elif cmd in ("add", "a"):
         user = args[1] if len(args) > 1 else None
         password = args[2] if len(args) > 2 and args[2] else None
-        months = int(args[3]) if len(args) > 3 else 1
-        cmd_add(user, password, months)
+        spec = args[3] if len(args) > 3 else "1"
+        cmd_add(user, password, spec)
     elif cmd in ("del", "rm", "d"):
         cmd_del(args[1] if len(args) > 1 else None)
     elif cmd in ("renew", "r"):
         user = args[1] if len(args) > 1 else None
-        months = int(args[2]) if len(args) > 2 else 1
-        cmd_renew(user, months)
+        spec = args[2] if len(args) > 2 else "1"
+        cmd_renew(user, spec)
     elif cmd in ("passwd", "pw", "p"):
         user = args[1] if len(args) > 1 else None
         password = args[2] if len(args) > 2 else None

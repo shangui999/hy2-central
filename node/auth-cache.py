@@ -43,7 +43,8 @@ class CacheHandler(BaseHTTPRequestHandler):
 
         with _lock:
             cached = _cache.get(password)
-            ttl = CACHE_TTL if cached["ok"] else CACHE_TTL_FAIL
+            if cached:
+                ttl = CACHE_TTL if cached.get("ok") else CACHE_TTL_FAIL
             if cached and time.time() - cached["ts"] < ttl:
                 self._respond(200, {"ok": cached["ok"]})
                 sys.stderr.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
